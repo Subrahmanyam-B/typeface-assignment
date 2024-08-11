@@ -14,15 +14,36 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import RestaurantList from "@/components/restaurant-list";
+import { SetStateAction, useEffect, useState } from "react";
+import {
+  getRestaurants,
+  searchNearbyRestaurants,
+  searchRestaurants,
+} from "@/api/restaurants";
+import { useQuery } from "@tanstack/react-query";
+import { IRestaurant } from "@/lib/types";
 const formSchema = z.object({ city: z.string().min(1).max(255) });
 
-export function LocationSearchForm() {
+export function LocationSearchForm({
+  setRestaurants,
+  page,
+  setPage,
+}: {
+  setRestaurants: React.Dispatch<SetStateAction<any>>;
+  page: number;
+  setPage: React.Dispatch<SetStateAction<number>>;
+}) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setPage(1);
+    const res = await searchRestaurants(values.city, String(page));
+    if (res) {
+      setRestaurants(res);
+    }
   }
 
   return (
@@ -58,17 +79,55 @@ export function LocationSearchForm() {
   );
 }
 
+export interface State {
+  page: number;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
+  data: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    restaurants: IRestaurant[];
+  };
+}
 const Homepage = () => {
+  const [page, setPage] = useState<number>(1);
+  const [restaurants, setRestaurants] = useState<any>(null);
+
+  const { data } = useQuery({
+    queryKey: ["restaurants", page],
+    queryFn: () => getRestaurants(String(page)),
+    // placeholderData: keepPreviousData,
+  });
+
+  useEffect(() => setRestaurants(data), [data]);
+
+  async function setLocation() {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const nearbyRestaurants = await searchNearbyRestaurants(
+        String(position.coords.latitude),
+        String(position.coords.longitude),
+      );
+      if (nearbyRestaurants) {
+        setRestaurants(nearbyRestaurants);
+      }
+    });
+  }
+
   return (
     <div>
       <div className="flex justify-center ">
-        <LocationSearchForm />
+        <LocationSearchForm
+          setRestaurants={setRestaurants}
+          page={page}
+          setPage={setPage}
+        />
       </div>
       <div className="flex justify-center py-4">
         <p className="text-gray-400"> --------- or --------</p>
       </div>
       <div className="flex justify-center">
         <Button
+          onClick={() => setLocation()}
           variant={"expandIcon"}
           Icon={Navigation}
           iconPlacement="left"
@@ -81,7 +140,7 @@ const Homepage = () => {
       </div>
 
       <div className="mt-20">
-        <div className="text-3xl font-semibold">Popular Restaurants</div>
+        <RestaurantList page={page} setPage={setPage} data={restaurants} />
       </div>
     </div>
   );

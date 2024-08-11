@@ -8,7 +8,7 @@ import {
 
 const router = express.Router();
 
-router.get("/", GetRestaurants);
+router.get("/restaurants", GetRestaurants);
 router.get("/restaurant/:id", GetRestaurantById);
 router.get("/search", searchRestaurants);
 router.get("/location", searchRestaurantsByLocation);

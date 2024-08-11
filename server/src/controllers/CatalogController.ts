@@ -7,10 +7,28 @@ export const GetRestaurants = async (
   next: NextFunction,
 ) => {
   try {
-    const restaurants = await Restaurant.find().limit(20);
-    return res.json(restaurants);
+    // Get page and limit from query parameters, defaulting to page 1 and limit 20
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Calculate the number of documents to skip
+    const skip = (page - 1) * limit;
+
+    // Fetch the restaurants with pagination
+    const restaurants = await Restaurant.find().skip(skip).limit(limit);
+
+    // Get the total number of restaurants for pagination purposes
+    const total = await Restaurant.countDocuments();
+
+    // Return the restaurants and pagination info
+    return res.json({
+      restaurants,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+    });
   } catch (err) {
-    return res.status(400).json(err);
+    return res.status(400).json({ error: err.message });
   }
 };
 
@@ -58,16 +76,16 @@ export const searchRestaurantsByLocation = async (
   req: Request,
   res: Response,
 ) => {
-  const { latitude, longitude } = req.body;
+  const lat = parseFloat(req.query.latitude as string);
+  const lon = parseFloat(req.query.longitude as string);
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 20;
 
-  if (!latitude || !longitude) {
+  if (!lat || !lon) {
     return res
       .status(400)
       .json({ error: "Latitude and longitude are required" });
   }
-
-  const lat = parseFloat(latitude as string);
-  const lon = parseFloat(longitude as string);
   console.log(lat, "latitude");
 
   await Restaurant.find()
@@ -79,9 +97,15 @@ export const searchRestaurantsByLocation = async (
           parseFloat(restaurant.location?.latitude),
           parseFloat(restaurant.location?.longitude),
         );
-        return distance <= 3;
+        return distance <= 100;
       });
-      res.status(200).json(nearbyRestaurants);
+      const total = nearbyRestaurants.length;
+      return res.status(200).json({
+        restaurants: nearbyRestaurants,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+      });
     })
     .catch((error) => {
       console.error("Error querying restaurants:", error);
@@ -90,8 +114,12 @@ export const searchRestaurantsByLocation = async (
 };
 
 export const searchRestaurants = async (req: Request, res: Response) => {
-  const city: string = req.body.city.toLowerCase();
+  const city = (req.query.city as string).toLowerCase();
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 20;
 
+  // Calculate the number of documents to skip
+  const skip = (page - 1) * limit;
   if (!city) {
     return res.status(400).json({ error: "City is required" });
   }
@@ -106,8 +134,19 @@ export const searchRestaurants = async (req: Request, res: Response) => {
           },
         },
       },
-    ]);
-    return res.status(200).json(restaurants);
+    ])
+      .limit(limit)
+      .skip(skip);
+    // Get the total number of restaurants for pagination purposes
+    const total = restaurants.length;
+
+    // Return the restaurants and pagination info
+    return res.json({
+      restaurants,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+    });
   } catch (err) {
     return res.status(400).json(err);
   }
